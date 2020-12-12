@@ -1,0 +1,157 @@
+##login##
+provider "aws" {
+  access_key = "<insert access key"
+  secret_key = "<insert secret key"
+  region = "<insert region>"
+}
+##end##
+
+##create or modify custom vpc##
+resource "aws_vpc" "<insert VPC_name, ex QLabs_VPC>" {
+  cidr_block = "10.0.0.0/16"
+  instance_tenancy = "default"
+  tags = {
+    Name = "<insert VPC_name>"
+  }
+}
+##end##
+
+##create or modify igw##
+resource "aws_internet_gateway" "<insert igw name>" {
+  vpc_id = "<insert vpc id to associate vpc to igw>"
+  tags = {
+    Name = "<insert igw name>"
+  }
+}
+##end##
+
+##create or modify usable subnet - private 01##
+resource "aws_subnet" "private_subnet_01" {
+  vpc_id = "<insert vpc id to associate vpc to subnet 1>"
+  cidr_block = "10.0.0.0/27"
+  availability_zone = "us-east-1a"
+  tags = {
+    Name = "private_subnet_01"
+  }
+}
+##end##
+
+##create or modify usable subnet - public 01##
+resource "aws_subnet" "public_subnet_01" {
+  vpc_id = "<insert vpc id to associate vpc to subnet 2>"
+  cidr_block = "10.0.1.0/27"
+  availability_zone = "us-east-1b"
+  map_public_ip_on_launch = true
+  tags = {
+    Name = "public_subnet_01"
+  }
+}
+##end##
+
+##create or modify elastic ip for NAT gateway##
+resource "aws_eip" "eip_natgw" {
+  vpc = true
+}
+##end##
+
+##create or modify NAT gateway##
+resource "aws_nat_gateway" "nat_gw" {
+  allocation_id = "<insert EIP id to associate EIP to NATGW>"
+  subnet_id = "<insert subnet id to associate subnet to NATGW>"
+  tags = {
+    Name = "nat_gw"
+  }
+}
+##end##
+
+##create or modify security group for ec2 - QLabs_VPC, private_subnet_01##
+resource "aws_security_group" "backendprivateSG" {
+  name = "backendprivateSG"
+  description = "Allow EC2 instance outbound NAT traffic"
+  vpc_id = "vpc-0d761422f17886a39"
+
+  ingress {
+    description = "Block inbound traffic except NAT"
+    from_port = 1024
+    to_port = 65535
+    protocol = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    description = "Allow outbound all"
+    from_port = 0
+    to_port = 0
+    protocol = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "backendprivateSG"
+  }
+}
+##end##
+
+##link and associate key pair to ec2 instances##
+resource "aws_key_pair" "<insert key pair name>" {
+    key_name = "<insert key pair name"
+    public_key = "<public key> <key pair name>"
+}
+##end##
+
+##create or modify ec2 instance - QLabs_VPC, private_subnet_01, backendprivateSG##
+resource "aws_instance" "amazonlinux01" {
+  ami = "ami-04d29b6f966df1537"
+  availability_zone = "us-east-1a"
+  instance_type = "t2.micro"
+  vpc_security_group_ids = ["<insert SG id>"]
+  subnet_id = "<insert subnet id>"
+  private_ip = "10.0.0.5"
+  key_name = "<associate key pair, insert key pair name>"
+  tags = {
+    Name = "amazonlinux01"
+  }
+}
+##end##
+
+##create or modify nacl for private_subnet_01##
+resource aws_network_acl "private_subnet_01_nacl" {
+  vpc_id = "<insert vpc id>"
+  subnet_ids = ["insert subnet id(s)"]
+
+  egress {
+    rule_no = 1000
+    action = "allow"
+    from_port = "0"
+    to_port = "0"
+    protocol = "tcp"
+    cidr_block = "10.0.1.0/27"
+  }
+
+  ingress {
+    rule_no = 1000
+    action = "allow"
+    from_port = "0"
+    to_port = "0"
+    protocol = "tcp"
+    cidr_block = "10.0.1.0/27"
+  }
+}
+##end##
+
+##create or modify route table for vpc implied router##
+resource "aws_route_table" "<insert implied router route table name>" {
+  vpc_id = "vpc-<>"
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = "<insert igw id>"
+  }
+  route {
+    cidr_block = "10.0.1.0/27"
+    nat_gateway_id = "<insert nat gw id"
+  }
+  tags = {
+    Name = "<insert implied router route table name>"
+  }
+}
+##end##
